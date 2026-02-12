@@ -1,0 +1,41 @@
+version: 0.2
+
+env:
+  shell: bash
+  variables:
+    AWS_REGION: ap-northeast-1
+    ECR_REPO: my-playwright-lambda
+    LAMBDA_FUNCTION_NAME: my-playwright-lambda-fn
+
+phases:
+  pre_build:
+    commands:
+      - "set -euo pipefail"
+      - "echo === pre_build ==="
+      - "aws --version"
+      - "docker --version"
+      - "ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)"
+      - "ECR_HOST=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+      - "ECR_URI=${ECR_HOST}/${ECR_REPO}"
+      - "IMAGE_TAG=$(echo ${CODEBUILD_RESOLVED_SOURCE_VERSION:-manual} | cut -c 1-7)"
+      - "echo ECR_URI=${ECR_URI}"
+      - "echo IMAGE_TAG=${IMAGE_TAG}"
+      - "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_HOST}"
+
+  build:
+    commands:
+      - "set -euo pipefail"
+      - "echo === build ==="
+      - "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
+      - "docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}"
+      - "docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}:latest"
+
+  post_build:
+    commands:
+      - "set -euo pipefail"
+      - "echo === post_build ==="
+      - "docker push ${ECR_URI}:${IMAGE_TAG}"
+      - "docker push ${ECR_URI}:latest"
+      - "echo Updating Lambda function image..."
+      - "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION_NAME} --image-uri ${ECR_URI}:${IMAGE_TAG} --publish"
+      - "echo Done."
