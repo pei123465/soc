@@ -1,23 +1,23 @@
 # syntax=docker/dockerfile:1
 
 ARG PYTHON_VERSION=3.12
-ARG PLAYWRIGHT_VERSION=1.58.0
 
 # ---- builder: Python依存とブラウザ本体を取得 ----
 FROM python:${PYTHON_VERSION}-bookworm AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/playwright
+    PLAYWRIGHT_BROWSERS_PATH=/playwright \
+    PYTHONPATH=/opt/python
 
 WORKDIR /build
 
 COPY requirements.txt .
 
-# 依存（/opt/pythonへ集約）
+# 依存を /opt/python へ集約（Lambdaに持ち込む）
 RUN python -m pip install --upgrade pip && \
     python -m pip install --target /opt/python -r requirements.txt
 
-# Chromiumのみダウンロード（OS依存はruntime側で入れる）
+# /opt/python を PYTHONPATH に載せたので playwright が実行できる
 RUN python -m playwright install chromium
 
 # ---- runtime: 実行時依存だけ入れて軽量化 ----
@@ -34,14 +34,15 @@ WORKDIR /var/task
 COPY --from=builder /opt/python /opt/python
 COPY --from=builder /playwright /playwright
 
-# OS依存のみ導入（apt前提）
-# ※ Playwrightの公式手順は install-deps / install --with-deps を提示しているciteturn0search1turn7view0
+# Playwright(Chromium) のOS依存を導入
+# ※ apt キャッシュ削除でサイズ削減
 RUN python -m playwright install-deps chromium && \
     rm -rf /var/lib/apt/lists/*
 
 # アプリコード
 COPY app/ ./app/
 
-# Lambda Runtime Interface Client（非AWSベースイメージをLambda互換にする）citeturn5view1turn4view4
-ENTRYPOINT [ "python", "-m", "awslambdaric" ]
-CMD [ "app.handler.lambda_handler" ]
+# Lambda Runtime Interface Client で Lambda 互換化
+# ※ requirements.txt に awslambdaric が必要です
+ENTRYPOINT ["python", "-m", "awslambdaric"]
+CMD ["app.handler.lambda_handler"]
