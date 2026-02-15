@@ -10,12 +10,11 @@ env:
 phases:
   pre_build:
     commands:
-      - set -euo pipefail
+      - set -eu
       - echo "Login to ECR..."
-      - ECR_URI=${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-      - aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_URI}
-      - IMAGE_URI=${ECR_URI}/${ECR_REPO}:latest
-      - echo "IMAGE_URI=${IMAGE_URI}"
+      - ECR_URI=654654329506.dkr.ecr.ap-northeast-1.amazonaws.com
+      - aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin ${ECR_URI}
+      - IMAGE_URI=${ECR_URI}/labola-booking-prod:latest
 
   build:
     commands:
